@@ -1,0 +1,26 @@
+
+syntax = "proto2";
+
+package shimmySample;
+
+enum CtrlToShimType {
+  CTRL2SHIM_ICD_VERSION = 1;
+}
+
+message CtrlToShim_m {
+  required CtrlToShimType  type = 1;
+  optional ShimIcdVersion_m icd_version = 2; // CTRL2SHIM_ICD_VERSION
+}
+
+enum ShimToCtrlType {
+  SHIM2CTRL_ICD_VERSION = 1;
+}
+
+message ShimToCtrl_m {
+  required ShimToCtrlType  type = 1;
+  optional ShimIcdVersion_m icd_version = 2; // SHIM2CTRL_ICD_VERSION
+}
+
+message ShimIcdVersion_m {
+  required int32 version = 1;
+}
