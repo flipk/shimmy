@@ -3,6 +3,10 @@ syntax = "proto2";
 
 package shimmySample;
 
+enum ICD_VERSION_ENUM {
+  ICD_VERSION = 1;
+};
+
 enum CtrlToShimType {
   CTRL2SHIM_ICD_VERSION = 1;
 }
@@ -22,5 +26,5 @@ message ShimToCtrl_m {
 }
 
 message ShimIcdVersion_m {
-  required int32 version = 1;
+  required int32 version = 1; // actually, ICD_VERSION_ENUM
 }

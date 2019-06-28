@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
+#include <stdlib.h>
 
 /////////////////////////////// ShimmyChild ///////////////////////////////
 
@@ -132,17 +133,17 @@ ShimmyChild::start(const std::string &path)
 
         // internet says to avoid calling any
         // registered atexit(3) handlers and just die already.
-        _exit(2);
+        _exit(99);
     }
     // else, parent
 
     // close pipe ends we won't use.
     close(fds_to_child.read_end());
     close(fds_from_child.write_end());
-
+    close(rendezvous_fds.write_end());
     int e;
     int readRet = ::read(rendezvous_fds.read_end(), &e, sizeof(e));
-    rendezvous_fds.close();
+    close(rendezvous_fds.read_end());
     if (readRet == sizeof(e))
     {
         // the exec failed!
@@ -160,7 +161,7 @@ ShimmyChild::start(const std::string &path)
     fd_from_child = fds_from_child.read_end();
     running = true;
 
-    return false;
+    return true;
 }
 
 void
@@ -168,19 +169,32 @@ ShimmyChild::stop(void)
 {
     if (running == false)
         return;
+
+    close(fd_to_child);
+    char buf[100];
+    while (::read(fd_from_child, buf, sizeof(buf)) > 0)
+        ;
+
+    // xxx must waitpid somewhere
+
+    running = false;
     // xxx todo
 }
 
 bool
 ShimmyChild::get_msg(google::protobuf::Message *msg)
 {
+    char buf[100];
+    int readRet = ::read(fd_from_child, buf, sizeof(buf));
+    if (readRet == 0)
+        return false;
     // xxx todo
-    return false;
+    return true;
 }
 
 bool
 ShimmyChild::send_msg(const google::protobuf::Message *msg)
 {
     // xxx todo
-    return false;
+    return true;
 }

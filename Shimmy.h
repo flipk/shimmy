@@ -1,4 +1,7 @@
 
+#ifndef __SHIMMY_H__
+#define __SHIMMY_H__
+
 #include <sys/types.h>
 #include <unistd.h>
 #include <string>
@@ -23,10 +26,13 @@ public:
 // a shimmy child instantiates this after being started to talk back
 // to the shimmy parent.
 class ShimmyParent {
+    int fd_from_parent;
+    int fd_to_parent;
 public:
     ShimmyParent(void);
     ~ShimmyParent(void);
 
+    bool init(void);
     bool get_msg(google::protobuf::Message *msg);
     bool send_msg(const google::protobuf::Message *msg);
 };
@@ -36,3 +42,5 @@ public:
 // format of this var is ("%d:%d", read_end, write_end)
 #define SHIMMY_RENDEZVOUS_ENV_VAR "SHIMMY_FDS"
 #endif
+
+#endif /* __SHIMMY_H__ */
