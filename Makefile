@@ -13,7 +13,7 @@ endif
 
 shimproto_TARGET = $(OBJDIR)/libshimproto.a
 shimproto_PROTOSRCS = shimmy.proto
-shimproto_CXXSRCS = ShimmyChild.cc ShimmyParent.cc
+shimproto_CXXSRCS = ShimmyChild.cc ShimmyParent.cc ShimmyCommon.cc
 
 PROG_TARGETS += testChild
 

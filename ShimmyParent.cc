@@ -1,9 +1,9 @@
 
 #define SHIMMY_INTERNAL 1
 #include "Shimmy.h"
+#include <stdio.h>
 
 /////////////////////////////// ShimmyParent ///////////////////////////////
-
 
 ShimmyParent::ShimmyParent(void)
 {
@@ -18,36 +18,20 @@ ShimmyParent::~ShimmyParent(void)
 bool
 ShimmyParent::init(void)
 {
-    char * env = getenv(SHIMMY_RENDEZVOUS_ENV_VAR);
+    char * env = getenv(SHIMMY_FDS_ENV_VAR);
     if (env == NULL)
     {
         fprintf(stderr, "ShimmyParent::init: ERROR: %s env var not set!\n");
         return false;
     }
-    if (sscanf(env, "%d:%d", &fd_from_parent, &fd_to_parent) != 2)
+    if (sscanf(env, "%d:%d", &read_fd, &write_fd) != 2)
     {
         fprintf(stderr, "ShimmyParent::init: ERROR: %s parse failure!\n");
         return false;
     }
     printf("ShimmyParent::init: fd from parent = %d, fd to parent = %d\n",
-           fd_from_parent, fd_to_parent);
-    return true;
-}
-
-bool
-ShimmyParent::get_msg(google::protobuf::Message *msg)
-{
-    char buf[100];
-    int readRet = ::read(fd_from_parent, buf, sizeof(buf));
-    if (readRet == 0)
-        return false;
-    // xxx todo
-    return true;
-}
-
-bool
-ShimmyParent::send_msg(const google::protobuf::Message *msg)
-{
-    // xxx todo
+           read_fd, write_fd);
+    pFis = new google::protobuf::io::FileInputStream(read_fd);
+    pFos = new google::protobuf::io::FileOutputStream(write_fd);
     return true;
 }

@@ -8,7 +8,7 @@ enum ICD_VERSION_ENUM {
 };
 
 enum CtrlToShimType {
-  CTRL2SHIM_ICD_VERSION = 1;
+  C2S_ICD_VERSION = 1;
 }
 
 message CtrlToShim_m {
@@ -17,7 +17,7 @@ message CtrlToShim_m {
 }
 
 enum ShimToCtrlType {
-  SHIM2CTRL_ICD_VERSION = 1;
+  S2C_ICD_VERSION = 1;
 }
 
 message ShimToCtrl_m {

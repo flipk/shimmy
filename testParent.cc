@@ -27,7 +27,7 @@ main()
 
     shimmySample::CtrlToShim_m   c2s;
 
-    c2s.set_type(shimmySample::CTRL2SHIM_ICD_VERSION);
+    c2s.set_type(shimmySample::C2S_ICD_VERSION);
     c2s.mutable_icd_version()->set_version(shimmySample::ICD_VERSION);
     if (child.send_msg(&c2s) == false)
     {
@@ -39,8 +39,11 @@ main()
     sleep(1);
 
 bail:
+    printf("parent: calling child.stop\n");
     child.stop();
     printf("parent: child has exited.\n");
+
+    sleep(1);
 
     return 0;
 }
@@ -56,8 +59,15 @@ readerThread(void *arg)
     {
         if (!child->get_msg(&s2c))
             break;
-        // xxx
+        switch (s2c.type())
+        {
+        case shimmySample::S2C_ICD_VERSION:
+            printf("parent: got ICD version %d from child\n",
+                   s2c.icd_version().version());
+            break;
+        }
     }
 
+    printf("parent: child->get_msg is done\n");
     return NULL;
 }

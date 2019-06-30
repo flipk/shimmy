@@ -7,14 +7,14 @@
 #include <string.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 /////////////////////////////// ShimmyChild ///////////////////////////////
 
 ShimmyChild::ShimmyChild(void)
 {
     running = false;
-    fd_from_child = -1;
-    fd_to_child = -1;
 }
 
 ShimmyChild::~ShimmyChild(void)
@@ -77,7 +77,7 @@ ShimmyChild::start(const std::string &path)
              fds_to_child.read_end(), fds_from_child.write_end());
     // do the setenv before the fork, because setenv is not on the list
     // of POSIX.1 async-signal-safe functions (see signal-safety(7)).
-    setenv(SHIMMY_RENDEZVOUS_ENV_VAR, fds_str, /*overwrite*/ 1);
+    setenv(SHIMMY_FDS_ENV_VAR, fds_str, /*overwrite*/ 1);
 
     // when yer fork'n a manythreaded process, the
     // child ain't good fer much but exec'n.
@@ -156,10 +156,11 @@ ShimmyChild::start(const std::string &path)
         return false;
     }
 
-    // save useful stuff for using later.
-    fd_to_child = fds_to_child.write_end();
-    fd_from_child = fds_from_child.read_end();
-    running = true;
+    read_fd = fds_from_child.read_end();
+    write_fd = fds_to_child.write_end();
+
+    pFis = new google::protobuf::io::FileInputStream(read_fd);
+    pFos = new google::protobuf::io::FileOutputStream(write_fd);
 
     return true;
 }
@@ -170,31 +171,27 @@ ShimmyChild::stop(void)
     if (running == false)
         return;
 
-    close(fd_to_child);
-    char buf[100];
-    while (::read(fd_from_child, buf, sizeof(buf)) > 0)
-        ;
+    // this is supposed to indicate to the child that it
+    // is now supposed to die.
+    delete pFos;
+    pFos = NULL;
+    close(write_fd);
+    write_fd = -1;
 
-    // xxx must waitpid somewhere
+    // wait for it to die, where it EOF's the pipe back to us.
+    delete pFis;
+    pFis = NULL;
+    char buf[100];
+    while (::read(read_fd, buf, sizeof(buf)) > 0)
+        ;
+    close(read_fd);
+    read_fd = -1;
+
+    // collect the dead zombie.
+    int wstatus = 0;
+    waitpid(pid, &wstatus, 0);
+
 
     running = false;
     // xxx todo
-}
-
-bool
-ShimmyChild::get_msg(google::protobuf::Message *msg)
-{
-    char buf[100];
-    int readRet = ::read(fd_from_child, buf, sizeof(buf));
-    if (readRet == 0)
-        return false;
-    // xxx todo
-    return true;
-}
-
-bool
-ShimmyChild::send_msg(const google::protobuf::Message *msg)
-{
-    // xxx todo
-    return true;
 }
