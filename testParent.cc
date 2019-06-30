@@ -5,16 +5,13 @@
 
 void *readerThread(void *arg);
 
-int
-main()
+bool dostart(ShimmyChild &child)
 {
-    ShimmyChild child;
-
     printf("parent: starting child.\n");
     if (child.start("obj/testChild") == false)
     {
         printf("starting child failed\n");
-        return 1;
+        return false;
     }
     printf("parent: child has started. doing stuff.\n");
 
@@ -24,6 +21,18 @@ main()
     pthread_attr_setdetachstate (&attr, PTHREAD_CREATE_DETACHED);
     pthread_attr_destroy        (&attr);
     pthread_create(&id, &attr, &readerThread, (void*) &child);
+
+    return true;
+}
+
+int
+main()
+{
+    ShimmyChild child;
+    bool done = false;
+
+    if (dostart(child) == false)
+        return 1;
 
     shimmySample::CtrlToShim_m   c2s;
 
@@ -36,14 +45,54 @@ main()
     }
     c2s.Clear();
 
-    sleep(1);
+    while (!done)
+    {
+        printf("1) send msg\n"
+               "2) send crash req\n"
+               "3) stopstart\n"
+               "4) stop and exit\n");
+        int req;
+        std::cin >> req;
+        switch (req)
+        {
+        case 1:
+        {
+            c2s.set_type(shimmySample::C2S_DATA);
+            c2s.mutable_data()->set_stuff(1);
+            c2s.mutable_data()->set_data("SOME DATA");
+            child.send_msg(&c2s);
+            c2s.Clear();
+            break;
+        }
+        case 2:
+        {
+            printf("parent: telling child to crash\n");
+            c2s.set_type(shimmySample::C2S_CRASH_CMD);
+            child.send_msg(&c2s);
+            c2s.Clear();
+            break;
+        }
+        case 3:
+        {
+            printf("parent: calling child.stop\n");
+            child.stop();
+            printf("parent: child has exited.\n");
+            if (dostart(child) == false)
+                return 1;
+            break;
+        }
+        case 4:
+        {
+            done = true;
+            break;
+        }
+        }
+    }
 
 bail:
     printf("parent: calling child.stop\n");
     child.stop();
     printf("parent: child has exited.\n");
-
-    sleep(1);
 
     return 0;
 }
@@ -65,6 +114,13 @@ readerThread(void *arg)
             printf("parent: got ICD version %d from child\n",
                    s2c.icd_version().version());
             break;
+
+        case shimmySample::S2C_DATA:
+            printf("parent: got DATA from child\n");
+            break;
+
+        default:
+            printf("parent: got unhandled msg type %d\n", s2c.type());
         }
     }
 

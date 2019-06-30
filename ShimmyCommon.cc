@@ -33,6 +33,22 @@ ShimmyCommon::get_msg(google::protobuf::Message *msg)
     uint32_t msgLen;
     bool ret;
 
+    while (1)
+    {
+        struct timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = 100000;
+        int max = read_fd+1;
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(read_fd, &rfds);
+        select(max, &rfds, NULL, NULL, &tv);
+        if (pFis == NULL || pFos == NULL)
+            return false;
+        if (FD_ISSET(read_fd, &rfds))
+            break;
+    }
+
     {
         google::protobuf::io::CodedInputStream codedStream(pFis);
         ret = codedStream.ReadVarint32(&msgLen);

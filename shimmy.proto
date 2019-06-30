@@ -9,22 +9,32 @@ enum ICD_VERSION_ENUM {
 
 enum CtrlToShimType {
   C2S_ICD_VERSION = 1;
+  C2S_CRASH_CMD   = 2; // no arg
+  C2S_DATA        = 3;
 }
 
 message CtrlToShim_m {
-  required CtrlToShimType  type = 1;
-  optional ShimIcdVersion_m icd_version = 2; // CTRL2SHIM_ICD_VERSION
+  required CtrlToShimType   type        = 1;
+  optional ShimIcdVersion_m icd_version = 2; // C2S_ICD_VERSION
+  optional DataContents_m   data        = 3; // C2S_DATA
 }
 
 enum ShimToCtrlType {
   S2C_ICD_VERSION = 1;
+  S2C_DATA        = 2;
 }
 
 message ShimToCtrl_m {
-  required ShimToCtrlType  type = 1;
-  optional ShimIcdVersion_m icd_version = 2; // SHIM2CTRL_ICD_VERSION
+  required ShimToCtrlType   type        = 1;
+  optional ShimIcdVersion_m icd_version = 2; // S2C_ICD_VERSION
+  optional DataContents_m   data        = 3; // S2C_DATA
 }
 
 message ShimIcdVersion_m {
   required int32 version = 1; // actually, ICD_VERSION_ENUM
+}
+
+message DataContents_m {
+  optional int32 stuff = 1;
+  optional string data  = 2;
 }

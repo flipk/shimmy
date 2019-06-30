@@ -7,6 +7,7 @@ int
 main()
 {
     ShimmyParent  parent;
+    bool done = false;
 
     printf("child: started\n");
 
@@ -27,7 +28,7 @@ main()
         goto bail;
     }
 
-    while (1)
+    while (!done)
     {
         if (!parent.get_msg(&c2s))
             break;
@@ -37,6 +38,23 @@ main()
             printf("child: got ICD version %d from parent\n",
                    c2s.icd_version().version());
             break;
+
+        case shimmySample::C2S_CRASH_CMD:
+            printf("child: told to exit\n");
+            done = true;
+            break;
+
+        case shimmySample::C2S_DATA:
+            printf("child: got DATA from parent\n");
+            s2c.set_type(shimmySample::S2C_DATA);
+            s2c.mutable_data()->set_stuff(1);
+            s2c.mutable_data()->set_data("SOME DATA");
+            parent.send_msg(&s2c);
+            s2c.Clear();
+            break;
+
+        default:
+            printf("child: got unhandled type %d\n", c2s.type());
         }
     }
 

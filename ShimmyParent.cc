@@ -7,12 +7,10 @@
 
 ShimmyParent::ShimmyParent(void)
 {
-    // xxx todo
 }
 
 ShimmyParent::~ShimmyParent(void)
 {
-    // xxx todo
 }
 
 bool

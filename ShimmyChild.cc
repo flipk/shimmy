@@ -162,6 +162,7 @@ ShimmyChild::start(const std::string &path)
     pFis = new google::protobuf::io::FileInputStream(read_fd);
     pFos = new google::protobuf::io::FileOutputStream(write_fd);
 
+    running = true;
     return true;
 }
 
@@ -177,21 +178,24 @@ ShimmyChild::stop(void)
     pFos = NULL;
     close(write_fd);
     write_fd = -1;
+    printf("parent: closed write pipe\n");
 
     // wait for it to die, where it EOF's the pipe back to us.
     delete pFis;
     pFis = NULL;
     char buf[100];
+    printf("parent: blocking in read\n");
     while (::read(read_fd, buf, sizeof(buf)) > 0)
         ;
     close(read_fd);
     read_fd = -1;
+    printf("parent: read pipe closed\n");
 
     // collect the dead zombie.
     int wstatus = 0;
     waitpid(pid, &wstatus, 0);
-
-
     running = false;
-    // xxx todo
+
+    printf("parent: child wstatus = %d\n", wstatus);
+
 }
