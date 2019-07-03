@@ -60,19 +60,30 @@ main()
         {
         case 1:
         {
-            c2s.set_type(shimmySample::C2S_DATA);
-            c2s.mutable_data()->set_stuff(1);
-            c2s.mutable_data()->set_data("SOME DATA");
-            child.send_msg(&c2s);
-            c2s.Clear();
+            if (thread_running)
+            {
+                c2s.set_type(shimmySample::C2S_DATA);
+                c2s.mutable_data()->set_stuff(1);
+                c2s.mutable_data()->set_data("SOME DATA");
+                child.send_msg(&c2s);
+                c2s.Clear();
+            }
+            else
+                printf("no child?\n");
             break;
         }
         case 2:
         {
-            printf("%d: parent: telling child to crash\n", Shimmy::get_tid());
-            c2s.set_type(shimmySample::C2S_CRASH_CMD);
-            child.send_msg(&c2s);
-            c2s.Clear();
+            if (thread_running)
+            {
+                printf("%d: parent: telling child to crash\n",
+                       Shimmy::get_tid());
+                c2s.set_type(shimmySample::C2S_CRASH_CMD);
+                child.send_msg(&c2s);
+                c2s.Clear();
+            }
+            else
+                printf("no child?\n");
             break;
         }
         case 3:
@@ -108,6 +119,9 @@ bail:
     printf("%d: parent: calling child.stop\n", Shimmy::get_tid());
     child.stop();
     printf("%d: parent: child has exited.\n", Shimmy::get_tid());
+            // wait for thread
+            while (thread_running)
+                usleep(10000);
 
     return 0;
 }
