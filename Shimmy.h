@@ -69,6 +69,7 @@ struct fd_pair {
     }
 };
 
+/** common methods between a Shimmy::Parent and Shimmy::Child */
 class Common {
     pthread_mutex_t mutex;
     void   _lock(void) { pthread_mutex_lock  (&mutex); }
@@ -91,29 +92,49 @@ protected:
     };
     friend class Lock;
 public:
-    // for use with select(2) if you want.
+    /** return the descriptor for the read-end.
+     * this is useful if you wish to use select(2) and only
+     * invoke \ref get_msg when you know there is something to service. */
     int  get_read_fd(void) const { return child_fds.fds[0]; }
+    /** read the next message from the read-pipe and return it.
+     * if there is no message available, this function blocks until
+     * there is one, or until \ref Child::stop is called. */
     bool get_msg(google::protobuf::Message *msg);
+    /** send a message through the write-pipe. */
     bool send_msg(const google::protobuf::Message *msg);
 };
 
-// a parent instantiates this to fork and talk to a shimmy child.
+/** a parent instantiates a Shimmy::Child to fork a child process and
+ * begin exchanging messages with it. */
 class Child : public Common {
     pid_t pid;
     bool running;
     void print_wait_status(int wstatus);
 public:
     Child(void);
+    /** destructor; if a child exists, invokes \ref stop. */
     ~Child(void);
+    /** starts a child process and opens the pipes. once this 
+     * returns, the user may begin calling \ref get_msg and 
+     * \ref send_msg to communicate with the child. */
     bool start(const std::string &path);
+    /** stops a child process by closing the pipes and waiting
+     * for the child to exit on its own. if it does not exit 
+     * after a reasonable interval, escalates to TERM and KILL
+     * signals to force it to die. */
     void stop(void);
 };
 
-// a child instantiates this to talk back to the parent, as one does.
+/** a child instantiates a Shimmy::Parent to communicate with the
+ * parent process. */
 class Parent : public Common {
 public:
     Parent(void);
     ~Parent(void);
+    /** if this process was started by \ref Shimmy::Child, this method
+     * will find the pipes and begin communicating. one this returns
+     * true, the user may begin using \ref get_msg and \ref send_msg
+     * to communicate with the parent. */
     bool init(void);
 };
 
@@ -148,19 +169,19 @@ struct pxfe_select {
     pxfe_fd_set  wfds;
     pxfe_fd_set  efds;
     pxfe_timeval   tv;
-    /** note you will need to re-fill rfds, wfds, efds, and tv every
+    /* note you will need to re-fill rfds, wfds, efds, and tv every
      * time you call one of the select methods */
     pxfe_select(void) { }
     ~pxfe_select(void) { }
-    /** call select with a timeout of forever (ignore "tv" member) */
+    /* call select with a timeout of forever (ignore "tv" member) */
     int select_forever(int *e = NULL) {
         return _select(NULL, e);
     }
-    /** call select with a timeout (using "tv" member) */
+    /* call select with a timeout (using "tv" member) */
     int select(int *e = NULL) {
         return _select(tv(), e);
     }
-    /** call select if you have your own timeval* you want to pass in */
+    /* call select if you have your own timeval* you want to pass in */
     int _select(struct timeval *tvp, int *e = NULL) {
         int n = rfds.nfds(), n2 = wfds.nfds(), n3 = efds.nfds();
         if (n < n2) n = n2;
@@ -175,3 +196,39 @@ struct pxfe_select {
 };
 
 #endif /* __SHIMMY_H__ */
+
+/** \mainpage libShimmy API user's manual
+
+This is the user's manual for the libShimmy API.
+
+The purpose of this library is to abstract protobuf communication
+between a parent process and a child it forks. A Shimmy::Child object
+is used in the parent to start the child process. A pair of pipes are
+created, and the file descriptors for these pipes are inherited to the
+child process.  One pipe is for parent-to-child messages and the other
+is for child-to-parent messages.  On the child side, a Shimmy::Parent
+object looks for and attaches to the descriptors inherited to the child
+by the Shimmy::Child in the parent.
+
+Interesting pages:
+
+<ul>
+<li> \ref Shimmy::Child  object
+<li> \ref Shimmy::Parent  object
+<li> \ref SampleParent
+<li> \ref SampleChild
+</ul>
+
+ */
+
+/** \page SampleParent Sample code for the parent
+
+\include testParent.cc
+
+ */
+
+/** \page SampleChild Sample code for the child
+
+\include testChild.cc
+
+ */

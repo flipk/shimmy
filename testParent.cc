@@ -91,7 +91,9 @@ main()
             printf("%d: parent: calling child.stop\n", Shimmy::get_tid());
             child.stop();
             printf("%d: parent: child has exited.\n", Shimmy::get_tid());
-            // wait for thread
+            // wait for thread .. always wait for thread to die after
+            // issuing a stop -- make sure it's dead before starting
+            // another one.
             while (thread_running)
                 usleep(10000);
             if (dostart(child) == false)
@@ -119,9 +121,10 @@ bail:
     printf("%d: parent: calling child.stop\n", Shimmy::get_tid());
     child.stop();
     printf("%d: parent: child has exited.\n", Shimmy::get_tid());
-            // wait for thread
-            while (thread_running)
-                usleep(10000);
+    // wait for thread. always wait for thread to die before
+    // destroying a Child.
+    while (thread_running)
+        usleep(10000);
 
     return 0;
 }
