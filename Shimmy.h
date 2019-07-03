@@ -101,6 +101,7 @@ public:
 class Child : public Common {
     pid_t pid;
     bool running;
+    void print_wait_status(int wstatus);
 public:
     Child(void);
     ~Child(void);

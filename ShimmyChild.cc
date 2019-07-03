@@ -123,6 +123,11 @@ Child :: start(const std::string &path)
         fprintf(stderr, "ShimmyChild::start: exec of '%s' failed: %d (%s)\n",
                 path.c_str(), e, errmsg);
 
+        // collect the dead zombie.
+        int wstatus = 0;
+        waitpid(pid, &wstatus, 0);
+        print_wait_status(wstatus);
+
         // cleanup stuff no longer needed.
         fds_to_child  .close();
         fds_from_child.close();
@@ -182,6 +187,7 @@ Child :: stop(void)
     // collect the dead zombie.
     int wstatus = 0;
     waitpid(pid, &wstatus, 0);
+    print_wait_status(wstatus);
     running = false;
 
     // don't close the closer_pipe here; give any reader thread
@@ -192,6 +198,22 @@ Child :: stop(void)
     // one, the closer pipe will be cleaned up there and a new one
     // created.
     printf("%d: parent: child wstatus = %d\n", get_tid(), wstatus);
+}
+
+void
+Child :: print_wait_status(int wstatus)
+{
+    if (WIFEXITED(wstatus))
+    {
+        printf("child process exited with status %d\n",
+               WEXITSTATUS(wstatus));
+    }
+    if (WIFSIGNALED(wstatus))
+    {
+        printf("child terminated with signal %d%s\n",
+               WTERMSIG(wstatus),
+               WCOREDUMP(wstatus) ? " (core dumped)" : "");
+    }
 }
 
 };
