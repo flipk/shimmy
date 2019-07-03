@@ -1,32 +1,31 @@
 
-#define SHIMMY_INTERNAL 1
 #include "Shimmy.h"
-#include <stdio.h>
 
-/////////////////////////////// ShimmyCommon ///////////////////////////////
+namespace Shimmy {
 
-ShimmyCommon::ShimmyCommon(void)
+Common :: Common(void)
 {
-    read_fd = write_fd = -1;
+    pthread_mutexattr_t  attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutex_init(&mutex, &attr);
+    pthread_mutexattr_destroy(&attr);
     pFis = NULL;
     pFos = NULL;
 }
 
-ShimmyCommon::~ShimmyCommon(void)
+Common :: ~Common(void)
 {
-    if (pFis)
-        delete pFis;
-    if (pFos)
-        delete pFos;
-    if (read_fd != -1)
-        close(read_fd);
-    if (write_fd != -1)
-        close(write_fd);
+    _lock();
+    if (pFos) delete pFos;
+    if (pFis) delete pFis;
+    pthread_mutex_destroy(&mutex);
 }
 
 bool
-ShimmyCommon::get_msg(google::protobuf::Message *msg)
+Common::get_msg(google::protobuf::Message *msg)
 {
+    Lock l(this);
+
     if (pFis == NULL)
         return false;
 
@@ -35,19 +34,24 @@ ShimmyCommon::get_msg(google::protobuf::Message *msg)
 
     while (1)
     {
-        struct timeval tv;
-        tv.tv_sec = 0;
-        tv.tv_usec = 100000;
-        int max = read_fd+1;
-        fd_set rfds;
-        FD_ZERO(&rfds);
-        FD_SET(read_fd, &rfds);
-        select(max, &rfds, NULL, NULL, &tv);
-        if (pFis == NULL || pFos == NULL)
+        pxfe_select sel;
+        sel.rfds.set(closer_pipe.read_end());
+        sel.rfds.set(child_fds.read_end());
+        sel.tv.set(1,0);
+        l.unlock();
+        int e = 0;
+        sel.select(&e);
+        if (e < 0)
+            fprintf(stderr, "select errno %d (%s)\n", e, strerror(e));
+        l.lock();
+        if (sel.rfds.is_set(closer_pipe.read_end()))
             return false;
-        if (FD_ISSET(read_fd, &rfds))
+        if (sel.rfds.is_set(child_fds.read_end()))
             break;
     }
+
+    if (pFis == NULL)
+        return false;
 
     {
         google::protobuf::io::CodedInputStream codedStream(pFis);
@@ -64,8 +68,10 @@ ShimmyCommon::get_msg(google::protobuf::Message *msg)
 }
 
 bool
-ShimmyCommon::send_msg(const google::protobuf::Message *msg)
+Common::send_msg(const google::protobuf::Message *msg)
 {
+    Lock l(this);
+
     if (pFos == NULL)
         return false;
 
@@ -81,3 +87,5 @@ ShimmyCommon::send_msg(const google::protobuf::Message *msg)
 
     return true;
 }
+
+};

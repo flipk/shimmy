@@ -5,15 +5,15 @@
 
 void *readerThread(void *arg);
 
-bool dostart(ShimmyChild &child)
+bool dostart(Shimmy::Child &child)
 {
-    printf("parent: starting child.\n");
+    printf("%d: parent: starting child.\n", Shimmy::get_tid());
     if (child.start("obj/testChild") == false)
     {
         printf("starting child failed\n");
         return false;
     }
-    printf("parent: child has started. doing stuff.\n");
+    printf("%d: parent: child has started. doing stuff.\n", Shimmy::get_tid());
 
     pthread_t id;
     pthread_attr_t                attr;
@@ -25,10 +25,12 @@ bool dostart(ShimmyChild &child)
     return true;
 }
 
+bool thread_running = false;
+
 int
 main()
 {
-    ShimmyChild child;
+    Shimmy::Child child;
     bool done = false;
 
     if (dostart(child) == false)
@@ -38,6 +40,7 @@ main()
 
     c2s.set_type(shimmySample::C2S_ICD_VERSION);
     c2s.mutable_icd_version()->set_version(shimmySample::ICD_VERSION);
+    c2s.mutable_icd_version()->set_pid(Shimmy::get_tid());
     if (child.send_msg(&c2s) == false)
     {
         printf("parent: failure to send msg to child\n");
@@ -66,7 +69,7 @@ main()
         }
         case 2:
         {
-            printf("parent: telling child to crash\n");
+            printf("%d: parent: telling child to crash\n", Shimmy::get_tid());
             c2s.set_type(shimmySample::C2S_CRASH_CMD);
             child.send_msg(&c2s);
             c2s.Clear();
@@ -74,11 +77,23 @@ main()
         }
         case 3:
         {
-            printf("parent: calling child.stop\n");
+            printf("%d: parent: calling child.stop\n", Shimmy::get_tid());
             child.stop();
-            printf("parent: child has exited.\n");
+            printf("%d: parent: child has exited.\n", Shimmy::get_tid());
+            // wait for thread
+            while (thread_running)
+                usleep(10000);
             if (dostart(child) == false)
                 return 1;
+            c2s.set_type(shimmySample::C2S_ICD_VERSION);
+            c2s.mutable_icd_version()->set_version(shimmySample::ICD_VERSION);
+            c2s.mutable_icd_version()->set_pid(Shimmy::get_tid());
+            if (child.send_msg(&c2s) == false)
+            {
+                printf("parent: failure to send msg to child\n");
+                goto bail;
+            }
+            c2s.Clear();
             break;
         }
         case 4:
@@ -90,9 +105,9 @@ main()
     }
 
 bail:
-    printf("parent: calling child.stop\n");
+    printf("%d: parent: calling child.stop\n", Shimmy::get_tid());
     child.stop();
-    printf("parent: child has exited.\n");
+    printf("%d: parent: child has exited.\n", Shimmy::get_tid());
 
     return 0;
 }
@@ -101,8 +116,11 @@ bail:
 void *
 readerThread(void *arg)
 {
-    ShimmyChild *child = (ShimmyChild*) arg;
+    Shimmy::Child *child = (Shimmy::Child*) arg;
     shimmySample::ShimToCtrl_m   s2c;
+
+    printf("%d: parent: reader thread started\n", Shimmy::get_tid());
+    thread_running = true;
 
     while (1)
     {
@@ -111,19 +129,23 @@ readerThread(void *arg)
         switch (s2c.type())
         {
         case shimmySample::S2C_ICD_VERSION:
-            printf("parent: got ICD version %d from child\n",
-                   s2c.icd_version().version());
+            printf("%d: parent: got ICD version %d from child %d\n",
+                   Shimmy::get_tid(),
+                   s2c.icd_version().version(),
+                   s2c.icd_version().pid());
             break;
 
         case shimmySample::S2C_DATA:
-            printf("parent: got DATA from child\n");
+            printf("%d: parent: got DATA from child\n", Shimmy::get_tid());
             break;
 
         default:
-            printf("parent: got unhandled msg type %d\n", s2c.type());
+            printf("%d: parent: got unhandled msg type %d\n",
+                   Shimmy::get_tid(), s2c.type());
         }
     }
 
-    printf("parent: child->get_msg is done\n");
+    printf("%d: parent: child->get_msg is done\n", Shimmy::get_tid());
+    thread_running = false;
     return NULL;
 }

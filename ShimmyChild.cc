@@ -1,74 +1,40 @@
 
-#define SHIMMY_INTERNAL 1
 #include "Shimmy.h"
-#include <stdio.h>
-#include <iostream>
-#include <errno.h>
-#include <string.h>
 #include <fcntl.h>
-#include <stdlib.h>
-#include <sys/types.h>
 #include <sys/wait.h>
 
-/////////////////////////////// ShimmyChild ///////////////////////////////
+namespace Shimmy {
 
-ShimmyChild::ShimmyChild(void)
+Child :: Child(void)
 {
+    pid = -1;
     running = false;
 }
 
-ShimmyChild::~ShimmyChild(void)
+Child :: ~Child(void)
 {
     if (running)
         stop();
 }
 
-struct fd_pair
-{
-    int fds[2];
-    inline fd_pair(void) { fds[0] = fds[1] = -1; }
-    inline bool init(const char *funcname) {
-        if (::pipe(fds) < 0) {
-            int e = errno;
-            char * errmsg = strerror(e);
-            fprintf(stderr,
-                    "%s: unable to create pipe: %d (%s)\n",
-                    funcname, e, errmsg);
-            fds[0] = fds[1] = -1;
-            return false;
-        }
-        return true;
-    }
-    inline void close(void) {
-        if (fds[0] != -1)
-            ::close(fds[0]);
-        if (fds[1] != -1)
-            ::close(fds[1]);
-    }
-    inline int  read_end(void) { return fds[0]; }
-    inline int write_end(void) { return fds[1]; }
-};
-
 bool
-ShimmyChild::start(const std::string &path)
+Child :: start(const std::string &path)
 {
+    Lock l(this);
+
     fd_pair fds_from_child;
     fd_pair fds_to_child;
     fd_pair rendezvous_fds;
 
-    if (!fds_from_child.init("ShimmyChild::start"))
+    // if a closer pipe was left around by a previous child,
+    // clean it up here.
+    closer_pipe.close();
+    if (fds_from_child.make("Shimmy::Child::start") == false)
         return false;
-    if (!fds_to_child.init("ShimmyChild::start"))
-    {
-        fds_from_child.close();
+    if (fds_to_child.make("Shimmy::Child::start") == false)
         return false;
-    }
-    if (!rendezvous_fds.init("ShimmyChild::start"))
-    {
-        fds_from_child.close();
-        fds_to_child.close();
+    if (rendezvous_fds.make("Shimmy::Child::start") == false)
         return false;
-    }
 
     // tell the child (ShimmyParent class) what fds it can write to
     // and read from for protobuf msgs.
@@ -89,13 +55,18 @@ ShimmyChild::start(const std::string &path)
         fds_from_child.close();
         fds_to_child.close();
         rendezvous_fds.close();
-        fprintf(stderr, "ShimmyChild::start: cannot fork: %d (%s)\n",
+        fprintf(stderr, "Shimmy::Child::start: cannot fork: %d (%s)\n",
                 e, errmsg);
         return false;
     }
+
     if (pid == 0)
     {
         // child
+
+        fds_to_child.close_write_end();
+        fds_from_child.close_read_end();
+        rendezvous_fds.close_read_end();
 
         // close ALL fds we don't need to avoid passing them to
         // the child which doesn't even know they exist and will
@@ -138,9 +109,10 @@ ShimmyChild::start(const std::string &path)
     // else, parent
 
     // close pipe ends we won't use.
-    close(fds_to_child.read_end());
-    close(fds_from_child.write_end());
-    close(rendezvous_fds.write_end());
+    fds_to_child.close_read_end();
+    fds_from_child.close_write_end();
+    rendezvous_fds.close_write_end();
+
     int e;
     int readRet = ::read(rendezvous_fds.read_end(), &e, sizeof(e));
     close(rendezvous_fds.read_end());
@@ -148,27 +120,40 @@ ShimmyChild::start(const std::string &path)
     {
         // the exec failed!
         char * errmsg = strerror(e);
-        // cleanup stuff no longer needed.
-        close(fds_to_child.write_end());
-        close(fds_from_child.read_end());
         fprintf(stderr, "ShimmyChild::start: exec of '%s' failed: %d (%s)\n",
                 path.c_str(), e, errmsg);
+
+        // cleanup stuff no longer needed.
+        fds_to_child  .close();
+        fds_from_child.close();
+        rendezvous_fds.close();
         return false;
     }
 
-    read_fd = fds_from_child.read_end();
-    write_fd = fds_to_child.write_end();
+    if (closer_pipe.make("Shimmy::Child::start") == false)
+    {
+        // cleanup stuff no longer needed.
+        fds_to_child  .close();
+        fds_from_child.close();
+        rendezvous_fds.close();
+        return false;
+    }
 
-    pFis = new google::protobuf::io::FileInputStream(read_fd);
-    pFos = new google::protobuf::io::FileOutputStream(write_fd);
+    child_fds.fds[0] = fds_from_child.take_read_end();
+    child_fds.fds[1] = fds_to_child  .take_write_end();
+
+    pFis = new google::protobuf::io::FileInputStream (child_fds.fds[0]);
+    pFos = new google::protobuf::io::FileOutputStream(child_fds.fds[1]);
 
     running = true;
     return true;
 }
 
 void
-ShimmyChild::stop(void)
+Child :: stop(void)
 {
+    Lock l(this);
+
     if (running == false)
         return;
 
@@ -176,26 +161,37 @@ ShimmyChild::stop(void)
     // is now supposed to die.
     delete pFos;
     pFos = NULL;
-    close(write_fd);
-    write_fd = -1;
-    printf("parent: closed write pipe\n");
+    child_fds.close_write_end();
+    printf("%d: parent: closed write pipe\n", get_tid());
 
-    // wait for it to die, where it EOF's the pipe back to us.
     delete pFis;
     pFis = NULL;
+    char c = 1;
+    if (::write(closer_pipe.write_end(), &c, 1) != 1)
+        fprintf(stderr, "Shimmy::Child::stop: unable to write closer pipe\n");
+
+    // wait for it to die, where it EOF's the pipe back to us.
     char buf[100];
-    printf("parent: blocking in read\n");
-    while (::read(read_fd, buf, sizeof(buf)) > 0)
+    // xxx select with timeout, then escalate to kill.
+    printf("%d: parent: blocking in read\n", get_tid());
+    while (::read(child_fds.read_end(), buf, sizeof(buf)) > 0)
         ;
-    close(read_fd);
-    read_fd = -1;
-    printf("parent: read pipe closed\n");
+    child_fds.close_read_end();
+    printf("%d: parent: read pipe closed\n", get_tid());
 
     // collect the dead zombie.
     int wstatus = 0;
     waitpid(pid, &wstatus, 0);
     running = false;
 
-    printf("parent: child wstatus = %d\n", wstatus);
-
+    // don't close the closer_pipe here; give any reader thread
+    // currently blocked in get_msg a chance to process it and wake
+    // up.
+    // it's okay, because if Shimmy::Child is deleted, the closer pipe
+    // will be cleaned up then; or if the user wants to ::start a new
+    // one, the closer pipe will be cleaned up there and a new one
+    // created.
+    printf("%d: parent: child wstatus = %d\n", get_tid(), wstatus);
 }
+
+};

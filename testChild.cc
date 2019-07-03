@@ -6,10 +6,10 @@
 int
 main()
 {
-    ShimmyParent  parent;
+    Shimmy::Parent  parent;
     bool done = false;
 
-    printf("child: started\n");
+    printf("%d: child: started\n", Shimmy::get_tid());
 
     if (parent.init() == false)
     {
@@ -22,6 +22,7 @@ main()
 
     s2c.set_type(shimmySample::S2C_ICD_VERSION);
     s2c.mutable_icd_version()->set_version(shimmySample::ICD_VERSION);
+    s2c.mutable_icd_version()->set_pid(Shimmy::get_tid());
     if (parent.send_msg(&s2c) == false)
     {
         printf("child: failure to send msg to parent\n");
@@ -35,17 +36,19 @@ main()
         switch (c2s.type())
         {
         case shimmySample::C2S_ICD_VERSION:
-            printf("child: got ICD version %d from parent\n",
-                   c2s.icd_version().version());
+            printf("%d: child: got ICD version %d from parent %d\n",
+                   Shimmy::get_tid(),
+                   c2s.icd_version().version(),
+                   c2s.icd_version().pid());
             break;
 
         case shimmySample::C2S_CRASH_CMD:
-            printf("child: told to exit\n");
+            printf("%d: child: told to exit\n", Shimmy::get_tid());
             done = true;
             break;
 
         case shimmySample::C2S_DATA:
-            printf("child: got DATA from parent\n");
+            printf("%d: child: got DATA from parent\n", Shimmy::get_tid());
             s2c.set_type(shimmySample::S2C_DATA);
             s2c.mutable_data()->set_stuff(1);
             s2c.mutable_data()->set_data("SOME DATA");
@@ -59,6 +62,6 @@ main()
     }
 
 bail:
-    printf("child: exiting\n");
+    printf("%d: child: exiting\n", Shimmy::get_tid());
     return 0;
 }

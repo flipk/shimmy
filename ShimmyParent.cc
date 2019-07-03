@@ -1,35 +1,52 @@
 
-#define SHIMMY_INTERNAL 1
 #include "Shimmy.h"
-#include <stdio.h>
 
-/////////////////////////////// ShimmyParent ///////////////////////////////
+namespace Shimmy {
 
-ShimmyParent::ShimmyParent(void)
+Parent :: Parent(void)
 {
 }
 
-ShimmyParent::~ShimmyParent(void)
+Parent :: ~Parent(void)
 {
+    if (closer_pipe.fds[1] != -1)
+    {
+        char c = 1;
+        if (::write(closer_pipe.fds[1], &c, 1) != 1)
+            fprintf(stderr, "Shimmy::Parent::~Parent: cannot write closer\n");
+        closer_pipe.close();
+    }
 }
 
 bool
-ShimmyParent::init(void)
+Parent :: init(void)
 {
+    Lock l(this);
+
+    if (closer_pipe.make("Shimmy::Parent::init") == false)
+        return false;
+
     char * env = getenv(SHIMMY_FDS_ENV_VAR);
     if (env == NULL)
     {
-        fprintf(stderr, "ShimmyParent::init: ERROR: %s env var not set!\n");
+        fprintf(stderr, "Shimmy::Parent::init: ERROR: %s env var not set!\n");
         return false;
     }
+    int read_fd, write_fd;
     if (sscanf(env, "%d:%d", &read_fd, &write_fd) != 2)
     {
-        fprintf(stderr, "ShimmyParent::init: ERROR: %s parse failure!\n");
+        fprintf(stderr, "Shimmy::Parent::init: ERROR: %s parse failure!\n");
         return false;
     }
-    printf("ShimmyParent::init: fd from parent = %d, fd to parent = %d\n",
-           read_fd, write_fd);
+    printf("%d: Shimmy::Parent::init: "
+           "fd from parent = %d, fd to parent = %d\n",
+           get_tid(), read_fd, write_fd);
+    child_fds.fds[0] = read_fd;
+    child_fds.fds[1] = write_fd;
+
     pFis = new google::protobuf::io::FileInputStream(read_fd);
     pFos = new google::protobuf::io::FileOutputStream(write_fd);
     return true;
 }
+
+};
