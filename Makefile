@@ -14,7 +14,7 @@ endif
 
 libshimmy_TARGET = $(OBJDIR)/libshimmy.a
 libshimmy_CXXSRCS = ShimmyCommon.cc ShimmyChild.cc ShimmyParent.cc
-libshimmy_DOXYFILE = Doxyfile.libshimmy
+libshimmy_DOXYFILE = Doxyfile.libshimmy Doxyfile.libshimmy-source
 
 # all test code below this line.
 

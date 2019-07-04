@@ -1,3 +1,6 @@
+/** \file Shimmy.h
+ * \brief this file contains Shimmy::Common, Shimmy::Child, and Shimmy::Parent
+ */
 
 #ifndef __SHIMMY_H__
 #define __SHIMMY_H__ 1
@@ -94,13 +97,30 @@ protected:
 public:
     /** return the descriptor for the read-end.
      * this is useful if you wish to use select(2) and only
-     * invoke \ref get_msg when you know there is something to service. */
+     * invoke \ref get_msg when you know there is something to service.
+     * \return the file descriptor number. */
     int  get_read_fd(void) const { return child_fds.fds[0]; }
     /** read the next message from the read-pipe and return it.
      * if there is no message available, this function blocks until
-     * there is one, or until \ref Child::stop is called. */
+     * there is one, or until \ref Child::stop is called.
+     * \param msg a pointer to a cleared protobuf message of the
+     *            correct type which this method will fill out
+     *            with the body of the received message.
+     * \return true if a message was received, false if the connection
+     *         to the other end should now be considered dead (i.e.
+     *         the parent is closing the child and wants it to exit,
+     *         or the child has died).
+     * \note if a thread is blocked in this function and another thread
+     *       calls \ref Child::stop, this function will return false
+     *       as soon as possible. the user must not further manipulate
+     *       this object (such as starting another child or deleting
+     *       this object) until that thread is done.  */
     bool get_msg(google::protobuf::Message *msg);
-    /** send a message through the write-pipe. */
+    /** send a message through the write-pipe.
+     * \param msg  a pointer to the user's fully populated message
+     *             to send; note all required fields must be populated.
+     * \return true if the message was sent, false if the connection
+     *         is dead. */
     bool send_msg(const google::protobuf::Message *msg);
 };
 
@@ -117,13 +137,27 @@ public:
     ~Child(void);
     /** starts a child process and opens the pipes. once this 
      * returns, the user may begin calling \ref get_msg and 
-     * \ref send_msg to communicate with the child. */
+     * \ref send_msg to communicate with the child.
+     * \param path  filename of the child executable to exec.
+     * \return true if the child was started, false if there
+     *         was some failure. */
     bool start(const std::string &path);
     /** stops a child process by closing the pipes and waiting
      * for the child to exit on its own. if it does not exit 
      * after a reasonable interval, escalates to TERM and KILL
-     * signals to force it to die. */
+     * signals to force it to die.
+     * \param shutdown_time the number of seconds to give the child
+     *        to respond to a shutdown.
+     * \note if another thread is blocked in \ref Common::get_msg,
+     *       this will cause that function to return false as soon
+     *       as possible. more interactions with this object (such
+     *       as deleting it or starting a new child) should not be
+     *       performed until it is known the other thread has completed
+     *       it's interations with object. */
     void stop(int shutdown_time = default_shutdown_time);
+    /** the default amount of time in seconds to give a child to
+     * respond to a closed reader pipe and exit in a controlled
+     * fashion. */
     static const int default_shutdown_time = 2;
 };
 
@@ -136,7 +170,10 @@ public:
     /** if this process was started by \ref Shimmy::Child, this method
      * will find the pipes and begin communicating. one this returns
      * true, the user may begin using \ref get_msg and \ref send_msg
-     * to communicate with the parent. */
+     * to communicate with the parent.
+     * \return true if initialization was successful, false if there
+     *         was some kind of failure (such as we are a child that
+     *         was not started by a Shimmy::Parent */
     bool init(void);
 };
 
@@ -205,22 +242,53 @@ struct pxfe_select {
 This is the user's manual for the libShimmy API.
 
 The purpose of this library is to abstract protobuf communication
-between a parent process and a child it forks. A Shimmy::Child object
-is used in the parent to start the child process. A pair of pipes are
-created, and the file descriptors for these pipes are inherited to the
-child process.  One pipe is for parent-to-child messages and the other
-is for child-to-parent messages.  On the child side, a Shimmy::Parent
-object looks for and attaches to the descriptors inherited to the child
-by the Shimmy::Child in the parent.
+between a parent process and a child it forks. 
 
-Interesting pages:
+\section ParentSide Parent process side
 
-<ul>
-<li> \ref Shimmy::Child  object
-<li> \ref Shimmy::Parent  object
-<li> \ref SampleParent
-<li> \ref SampleChild
-</ul>
+A Shimmy::Child object is used in the parent to start the child
+process. The parent invokes Shimmy::Child::start to fork a child
+executable. A pair of pipes are created, and the file descriptors for
+these pipes are inherited to the child process. One pipe is for
+parent-to-child messages and the other is for child-to-parent
+messages.
+
+The parent may then enter a loop of calling Shimmy::Child::get_msg to
+retrieve messages from the child. If this ever returns false, the child
+is dead or dying.
+
+The parent may send messages to the child using Shimmy::Child::send_msg.
+
+The parent may stop the child by calling Shimmy::Child::stop. The child
+is supposed to detect this (see below) and respond by cleaning up and 
+exiting.
+
+Once the child has exited, a new one may be started as described above.
+
+The child may exit at any time it wishes. The parent will detect this
+by Shimmy::Child::get_msg returning false.
+
+\ref SampleParent
+
+\section ChildSide Child process side
+
+On the child side, a Shimmy::Parent object looks for and attaches to
+the descriptors inherited to the child by the Shimmy::Child in the
+parent.
+
+The child may then enter a loop of calling Shimmy::Parent::get_msg to
+retrieve messages from the child. If this ever returns false, the parent
+has invoked Shimmy::Child::stop, and the child must respond to this by cleaning
+up and exiting.
+
+The parent detects the child exiting by detecting the closure of the
+pipe from child to parent.
+
+The child may send messages to the parent using Shimmy::Parent::send_msg.
+
+The child may exit at any time it wishes.
+
+\ref SampleChild
 
  */
 
