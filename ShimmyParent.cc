@@ -28,13 +28,13 @@ Parent :: init(void)
     char * env = getenv(SHIMMY_FDS_ENV_VAR);
     if (env == NULL)
     {
-        fprintf(stderr, "Shimmy::Parent::init: ERROR: %s env var not set!\n");
+        fprintf(stderr, "Shimmy::Parent::init: ERROR: %s env var not set!\n", SHIMMY_FDS_ENV_VAR);
         return false;
     }
     int read_fd, write_fd;
     if (sscanf(env, "%d:%d", &read_fd, &write_fd) != 2)
     {
-        fprintf(stderr, "Shimmy::Parent::init: ERROR: %s parse failure!\n");
+        fprintf(stderr, "Shimmy::Parent::init: ERROR: %s parse failure!\n", SHIMMY_FDS_ENV_VAR);
         return false;
     }
     printf("%d: Shimmy::Parent::init: "

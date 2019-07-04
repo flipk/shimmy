@@ -100,8 +100,11 @@ Child :: start(const std::string &path)
                     &e, sizeof(int)) != sizeof(int))
         {
             // we can't call printf or cerr cuz !async-signal-safe
-            write(2, "ShimmyChild::start: CANT WRITE ERRNO TO PARENT\n",
+            int r =
+                write(2, "ShimmyChild::start: CANT WRITE ERRNO TO PARENT\n",
                   strlen("ShimmyChild::start: CANT WRITE ERRNO TO PARENT\n"));
+            if (r < 0)
+            { /* what to do? just quiet the compiler. */ }
         }
 
         // internet says to avoid calling any

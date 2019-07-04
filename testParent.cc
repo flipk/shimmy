@@ -2,6 +2,7 @@
 #include "Shimmy.h"
 #include SHIMMY_PROTO_HDR
 #include <stdio.h>
+#include <iostream>
 
 void *readerThread(void *arg);
 

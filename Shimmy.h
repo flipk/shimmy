@@ -9,6 +9,8 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <string.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string>
 #include <google/protobuf/message.h>
