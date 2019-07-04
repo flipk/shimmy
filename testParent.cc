@@ -37,10 +37,10 @@ main()
     if (dostart(child) == false)
         return 1;
 
-    shimmySample::CtrlToShim_m   c2s;
+    shimmyTest::CtrlToShim_m   c2s;
 
-    c2s.set_type(shimmySample::C2S_ICD_VERSION);
-    c2s.mutable_icd_version()->set_version(shimmySample::ICD_VERSION);
+    c2s.set_type(shimmyTest::C2S_ICD_VERSION);
+    c2s.mutable_icd_version()->set_version(shimmyTest::ICD_VERSION);
     c2s.mutable_icd_version()->set_pid(Shimmy::get_tid());
     if (child.send_msg(&c2s) == false)
     {
@@ -63,7 +63,7 @@ main()
         {
             if (thread_running)
             {
-                c2s.set_type(shimmySample::C2S_DATA);
+                c2s.set_type(shimmyTest::C2S_DATA);
                 c2s.mutable_data()->set_stuff(1);
                 c2s.mutable_data()->set_data("SOME DATA");
                 child.send_msg(&c2s);
@@ -79,7 +79,7 @@ main()
             {
                 printf("%d: parent: telling child to crash\n",
                        Shimmy::get_tid());
-                c2s.set_type(shimmySample::C2S_CRASH_CMD);
+                c2s.set_type(shimmyTest::C2S_CRASH_CMD);
                 child.send_msg(&c2s);
                 c2s.Clear();
             }
@@ -99,8 +99,8 @@ main()
                 usleep(10000);
             if (dostart(child) == false)
                 return 1;
-            c2s.set_type(shimmySample::C2S_ICD_VERSION);
-            c2s.mutable_icd_version()->set_version(shimmySample::ICD_VERSION);
+            c2s.set_type(shimmyTest::C2S_ICD_VERSION);
+            c2s.mutable_icd_version()->set_version(shimmyTest::ICD_VERSION);
             c2s.mutable_icd_version()->set_pid(Shimmy::get_tid());
             if (child.send_msg(&c2s) == false)
             {
@@ -135,7 +135,7 @@ void *
 readerThread(void *arg)
 {
     Shimmy::Child *child = (Shimmy::Child*) arg;
-    shimmySample::ShimToCtrl_m   s2c;
+    shimmyTest::ShimToCtrl_m   s2c;
 
     printf("%d: parent: reader thread started\n", Shimmy::get_tid());
     thread_running = true;
@@ -146,7 +146,7 @@ readerThread(void *arg)
             break;
         switch (s2c.type())
         {
-        case shimmySample::S2C_ICD_VERSION:
+        case shimmyTest::S2C_ICD_VERSION:
             printf("%d: parent: got ICD version %d from child %d\n",
                    Shimmy::get_tid(),
                    s2c.icd_version().version(),
@@ -159,7 +159,7 @@ readerThread(void *arg)
             }
             break;
 
-        case shimmySample::S2C_DATA:
+        case shimmyTest::S2C_DATA:
             printf("%d: parent: got DATA from child\n", Shimmy::get_tid());
             break;
 

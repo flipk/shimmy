@@ -21,13 +21,13 @@ libshimmy_DOXYFILE = Doxyfile.libshimmy Doxyfile.libshimmy-source
 LIB_TARGETS += testProto
 
 testProto_TARGET = $(OBJDIR)/libshimmytestProto.a
-testProto_PROTOSRCS = shimmy.proto
+testProto_PROTOSRCS = testShimmy.proto
 
 PROG_TARGETS += testChild
 
 testChild_TARGET = $(OBJDIR)/testChild
 testChild_CXXSRCS = testChild.cc
-testChild_DEFS = -DSHIMMY_PROTO_HDR=\"$(testProto_shimmy.proto_HDR)\"
+testChild_DEFS = -DSHIMMY_PROTO_HDR=\"$(testProto_testShimmy.proto_HDR)\"
 testChild_LIBS = -lprotobuf -lpthread
 testChild_DEPLIBS = $(libshimmy_TARGET) $(testProto_TARGET)
 
@@ -35,7 +35,7 @@ PROG_TARGETS += testParent
 
 testParent_TARGET = $(OBJDIR)/testParent
 testParent_CXXSRCS = testParent.cc
-testParent_DEFS = -DSHIMMY_PROTO_HDR=\"$(testProto_shimmy.proto_HDR)\"
+testParent_DEFS = -DSHIMMY_PROTO_HDR=\"$(testProto_testShimmy.proto_HDR)\"
 testParent_LIBS = -lprotobuf -lpthread
 testParent_DEPLIBS = $(libshimmy_TARGET) $(testProto_TARGET)
 

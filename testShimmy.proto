@@ -1,7 +1,7 @@
 
 syntax = "proto2";
 
-package shimmySample;
+package shimmyTest;
 
 enum ICD_VERSION_ENUM {
   ICD_VERSION = 1;
