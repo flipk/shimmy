@@ -14,7 +14,6 @@ Parent :: ~Parent(void)
         char c = 1;
         if (::write(closer_pipe.fds[1], &c, 1) != 1)
             fprintf(stderr, "Shimmy::Parent::~Parent: cannot write closer\n");
-        closer_pipe.close();
     }
 }
 

@@ -21,6 +21,7 @@ bool
 Child :: start(const std::string &path)
 {
     Lock l(this);
+    int e = 0;
 
     fd_pair fds_from_child;
     fd_pair fds_to_child;
@@ -48,9 +49,10 @@ Child :: start(const std::string &path)
     // when yer fork'n a manythreaded process, the
     // child ain't good fer much but exec'n.
     pid = fork();
+    e = errno;
+
     if (pid < 0)
     {
-        int e = errno;
         char * errmsg = strerror(e);
         fds_from_child.close();
         fds_to_child.close();
@@ -93,7 +95,7 @@ Child :: start(const std::string &path)
         // if the execl fubard, save the errno;
         // we cain't print nuthin, on accounta some stuff,
         // so send it to poppa for print'n.
-        int e = errno;
+        e = errno;
         if (::write(rendezvous_fds.write_end(),
                     &e, sizeof(int)) != sizeof(int))
         {
@@ -108,12 +110,15 @@ Child :: start(const std::string &path)
     }
     // else, parent
 
+    // the setenv was for the child. parent doesn't need it anymore.
+    unsetenv(SHIMMY_FDS_ENV_VAR);
+
     // close pipe ends we won't use.
     fds_to_child.close_read_end();
     fds_from_child.close_write_end();
     rendezvous_fds.close_write_end();
 
-    int e;
+    e = 0;
     int readRet = ::read(rendezvous_fds.read_end(), &e, sizeof(e));
     close(rendezvous_fds.read_end());
     if (readRet == sizeof(e))
@@ -155,7 +160,7 @@ Child :: start(const std::string &path)
 }
 
 void
-Child :: stop(void)
+Child :: stop(int shutdown_time)
 {
     Lock l(this);
 
@@ -167,27 +172,45 @@ Child :: stop(void)
     delete pFos;
     pFos = NULL;
     child_fds.close_write_end();
-    printf("%d: parent: closed write pipe\n", get_tid());
-
     delete pFis;
     pFis = NULL;
+
+    // if a thread on this end is currently blocked in get_msg,
+    // signal it to wake up and return false.
     char c = 1;
     if (::write(closer_pipe.write_end(), &c, 1) != 1)
         fprintf(stderr, "Shimmy::Child::stop: unable to write closer pipe\n");
 
-    // wait for it to die, where it EOF's the pipe back to us.
-    char buf[100];
-    // xxx select with timeout, then escalate to kill.
-    printf("%d: parent: blocking in read\n", get_tid());
-    while (::read(child_fds.read_end(), buf, sizeof(buf)) > 0)
-        ;
-    child_fds.close_read_end();
-    printf("%d: parent: read pipe closed\n", get_tid());
+    // wait for the child to exit and close the pipe back to us.
+    bool do_wait = true;
+    if (!waitfor_closure(child_fds.read_end(), shutdown_time))
+    {
+        printf("Shimmy::Child::stop: ESCALATING to SIGTERM\n");
+        kill(pid, SIGTERM);
+        if (!waitfor_closure(child_fds.read_end(), shutdown_time))
+        {
+            printf("Shimmy::Child::stop: ESCALATING to SIGKILL\n");
+            kill(pid, SIGKILL);
+            if (!waitfor_closure(child_fds.read_end(), shutdown_time))
+            {
+                fprintf(stderr, "Shimmy::Child::stop: FAILURE TO KILL\n");
+                // don't hang up this thread blocking in waitpid for
+                // a zombie that may never happen.
+                do_wait = false;
+            }
+        }
+    }
 
-    // collect the dead zombie.
-    int wstatus = 0;
-    waitpid(pid, &wstatus, 0);
-    print_wait_status(wstatus);
+    child_fds.close_read_end();
+
+    if (do_wait)
+    {
+        // collect the dead zombie.
+        int wstatus = 0;
+        waitpid(pid, &wstatus, 0);
+        print_wait_status(wstatus);
+    }
+
     running = false;
 
     // don't close the closer_pipe here; give any reader thread
@@ -197,7 +220,36 @@ Child :: stop(void)
     // will be cleaned up then; or if the user wants to ::start a new
     // one, the closer pipe will be cleaned up there and a new one
     // created.
-    printf("%d: parent: child wstatus = %d\n", get_tid(), wstatus);
+}
+
+bool
+Child::waitfor_closure(int fd, int shutdown_time)
+{
+    char buf[20];
+    while (1)
+    {
+        pxfe_select sel;
+        sel.rfds.set(fd);
+        sel.tv.set(shutdown_time,0);
+        if (sel.select() == 0)
+        {
+            fprintf(stderr, "Shimmy::Child::stop: child did not close\n");
+            return false;
+        }
+        if (sel.rfds.is_set(fd))
+        {
+            int r = ::read(fd, buf, sizeof(buf));
+            if (r == 0)
+                return true;
+            int e = errno;
+            if (r < 0)
+            {
+                fprintf(stderr, "Shimmy::Child::stop: read: %d (%s)\n",
+                        e, strerror(e));
+                return false;
+            }
+        }
+    }
 }
 
 void
@@ -205,14 +257,14 @@ Child :: print_wait_status(int wstatus)
 {
     if (WIFEXITED(wstatus))
     {
-        printf("child process exited with status %d\n",
+        printf("Shimmy::Child: exited with status %d\n",
                WEXITSTATUS(wstatus));
     }
     if (WIFSIGNALED(wstatus))
     {
-        printf("child terminated with signal %d%s\n",
-               WTERMSIG(wstatus),
-               WCOREDUMP(wstatus) ? " (core dumped)" : "");
+        fprintf(stderr, "Shimmy::Child: terminated with signal %d%s\n",
+                WTERMSIG(wstatus),
+                WCOREDUMP(wstatus) ? " (core dumped)" : "");
     }
 }
 

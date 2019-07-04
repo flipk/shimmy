@@ -3,6 +3,9 @@
 #include SHIMMY_PROTO_HDR
 #include <stdio.h>
 
+// set this to 1 to test if SIGTERM/SIGKILL escalation works
+#define TEST_ESCALATION 0
+
 int
 main()
 {
@@ -20,9 +23,14 @@ main()
     shimmySample::CtrlToShim_m   c2s;
     shimmySample::ShimToCtrl_m   s2c;
 
+#if TEST_ESCALATION
+    signal(SIGTERM, SIG_IGN);
+#endif
+
     s2c.set_type(shimmySample::S2C_ICD_VERSION);
     s2c.mutable_icd_version()->set_version(shimmySample::ICD_VERSION);
     s2c.mutable_icd_version()->set_pid(Shimmy::get_tid());
+    s2c.mutable_icd_version()->set_shutdown_time(5);
     if (parent.send_msg(&s2c) == false)
     {
         printf("child: failure to send msg to parent\n");
@@ -63,5 +71,10 @@ main()
 
 bail:
     printf("%d: child: exiting\n", Shimmy::get_tid());
+
+#if TEST_ESCALATION
+    sleep(20);
+#endif
+
     return 0;
 }

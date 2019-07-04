@@ -30,7 +30,6 @@ Common::get_msg(google::protobuf::Message *msg)
         return false;
 
     uint32_t msgLen;
-    bool ret;
 
     while (1)
     {
@@ -55,13 +54,11 @@ Common::get_msg(google::protobuf::Message *msg)
 
     {
         google::protobuf::io::CodedInputStream codedStream(pFis);
-        ret = codedStream.ReadVarint32(&msgLen);
-        if (ret == false)
+        if (!codedStream.ReadVarint32(&msgLen))
             return false;
     } // codedStream destroyed here
 
-    ret = msg->ParseFromBoundedZeroCopyStream(pFis, msgLen);
-    if (ret == false)
+    if (!msg->ParseFromBoundedZeroCopyStream(pFis, msgLen))
         return false;
 
     return true;

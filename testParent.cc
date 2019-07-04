@@ -26,6 +26,7 @@ bool dostart(Shimmy::Child &child)
 }
 
 bool thread_running = false;
+int shutdown_time = Shimmy::Child::default_shutdown_time;
 
 int
 main()
@@ -89,7 +90,7 @@ main()
         case 3:
         {
             printf("%d: parent: calling child.stop\n", Shimmy::get_tid());
-            child.stop();
+            child.stop(shutdown_time);
             printf("%d: parent: child has exited.\n", Shimmy::get_tid());
             // wait for thread .. always wait for thread to die after
             // issuing a stop -- make sure it's dead before starting
@@ -119,7 +120,7 @@ main()
 
 bail:
     printf("%d: parent: calling child.stop\n", Shimmy::get_tid());
-    child.stop();
+    child.stop(shutdown_time);
     printf("%d: parent: child has exited.\n", Shimmy::get_tid());
     // wait for thread. always wait for thread to die before
     // destroying a Child.
@@ -150,6 +151,12 @@ readerThread(void *arg)
                    Shimmy::get_tid(),
                    s2c.icd_version().version(),
                    s2c.icd_version().pid());
+            if (s2c.icd_version().has_shutdown_time())
+            {
+                shutdown_time = s2c.icd_version().shutdown_time();
+                printf("%d: child overrides shutdown time to %d seconds\n",
+                       Shimmy::get_tid(), shutdown_time);
+            }
             break;
 
         case shimmySample::S2C_DATA:

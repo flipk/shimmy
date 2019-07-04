@@ -109,6 +109,7 @@ public:
 class Child : public Common {
     pid_t pid;
     bool running;
+    bool waitfor_closure(int fd, int shutdown_time);
     void print_wait_status(int wstatus);
 public:
     Child(void);
@@ -122,7 +123,8 @@ public:
      * for the child to exit on its own. if it does not exit 
      * after a reasonable interval, escalates to TERM and KILL
      * signals to force it to die. */
-    void stop(void);
+    void stop(int shutdown_time = default_shutdown_time);
+    static const int default_shutdown_time = 2;
 };
 
 /** a child instantiates a Shimmy::Parent to communicate with the
@@ -141,6 +143,7 @@ public:
 #define SHIMMY_FDS_ENV_VAR "SHIMMY_FDS"
 
 
+// miscellaneous helpers to wrapper ugly posix boilerplate
 
 struct pxfe_timeval : public timeval
 {

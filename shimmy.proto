@@ -33,6 +33,9 @@ message ShimToCtrl_m {
 message ShimIcdVersion_m {
   required int32 version = 1; // actually, ICD_VERSION_ENUM
   required int32 pid = 2;
+  // a child may tell a parent how many seconds it needs
+  // to properly shut down.
+  optional int32 shutdown_time = 3;
 }
 
 message DataContents_m {
