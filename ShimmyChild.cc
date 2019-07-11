@@ -54,9 +54,6 @@ Child :: start(const std::string &path)
     if (pid < 0)
     {
         char * errmsg = strerror(e);
-        fds_from_child.close();
-        fds_to_child.close();
-        rendezvous_fds.close();
         fprintf(stderr, "Shimmy::Child::start: cannot fork: %d (%s)\n",
                 e, errmsg);
         return false;
@@ -123,7 +120,7 @@ Child :: start(const std::string &path)
 
     e = 0;
     int readRet = ::read(rendezvous_fds.read_end(), &e, sizeof(e));
-    close(rendezvous_fds.read_end());
+    rendezvous_fds.close_read_end();
     if (readRet == sizeof(e))
     {
         // the exec failed!
@@ -136,27 +133,19 @@ Child :: start(const std::string &path)
         waitpid(pid, &wstatus, 0);
         print_wait_status(wstatus);
 
-        // cleanup stuff no longer needed.
-        fds_to_child  .close();
-        fds_from_child.close();
-        rendezvous_fds.close();
         return false;
     }
 
     if (closer_pipe.make("Shimmy::Child::start") == false)
     {
-        // cleanup stuff no longer needed.
-        fds_to_child  .close();
-        fds_from_child.close();
-        rendezvous_fds.close();
         return false;
     }
 
-    child_fds.fds[0] = fds_from_child.take_read_end();
-    child_fds.fds[1] = fds_to_child  .take_write_end();
+    child_fds.set(fds_from_child.take_read_end(),
+                  fds_to_child  .take_write_end());
 
-    pFis = new google::protobuf::io::FileInputStream (child_fds.fds[0]);
-    pFos = new google::protobuf::io::FileOutputStream(child_fds.fds[1]);
+    pFis = new google::protobuf::io::FileInputStream (child_fds. read_end());
+    pFos = new google::protobuf::io::FileOutputStream(child_fds.write_end());
 
     running = true;
     return true;

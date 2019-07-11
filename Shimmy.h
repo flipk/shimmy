@@ -23,55 +23,51 @@ namespace Shimmy {
 
 static inline int get_tid(void ) { return syscall(SYS_gettid); }
 
-struct fd_pair {
-    int fds[2];
-    fd_pair(void) { fds[0] = fds[1] = -1; }
-    ~fd_pair(void) { close(); }
-    bool make(const char *func)
-    {
-        if (::pipe(fds) < 0)
-        {
+class fd_pair {
+    struct fd {
+        int d;
+        fd(void) : d(-1) { }
+        ~fd(void) { close(); }
+        void close(void) {
+            if (d != -1)
+                ::close(d);
+            d = -1;
+        }
+        // return the descriptor, and remove it from
+        // this struct so it doesn't get auto-closed
+        // on destructor (in effect, taking ownership).
+        int take(void) {
+            int _d = d;
+            d = -1;
+            return _d;
+        }
+    };
+    fd fds[2];
+public:
+    bool make(const char *func) {
+        int _ds[2];
+        if (::pipe(_ds) < 0) {
             int e = errno;
             const char *msg = strerror(e);
             fprintf(stderr, "Shimmy::%s: ERROR making pipe: %d (%s)\n",
                     func, e, msg);
             return false;
         }
+        set(_ds[0], _ds[1]);
         return true;
     }
-    void close(void)
-    {
-        if (fds[0] != -1)
-        {
-            ::close(fds[0]);
-            fds[0] = -1;
-        }
-        if (fds[1] != -1)
-        {
-            ::close(fds[1]);
-            fds[1] = -1;
-        }
+    void set(int _rd, int _wr) {
+        close();
+        fds[0].d = _rd;
+        fds[1].d = _wr;
     }
-    int  read_end(void) const { return fds[0]; }
-    int write_end(void) const { return fds[1]; }
-    int take_read_end (void) { int fd = fds[0]; fds[0] = -1; return fd; }
-    int take_write_end(void) { int fd = fds[1]; fds[1] = -1; return fd; }
-    void close_read_end(void)
-    {
-        if (fds[0] != -1)
-        {
-            ::close(fds[0]);
-            fds[0] = -1;
-        }
-    }
-    void close_write_end(void)
-    {
-        if (fds[1] != -1)
-        {
-            ::close(fds[1]);
-            fds[1] = -1;
-        }
-    }
+    void close          (void) { fds[0].close(); fds[1].close(); }
+    void close_read_end (void) { fds[0].close(); }
+    void close_write_end(void) { fds[1].close(); }
+    int  read_end       (void) const { return fds[0].d; }
+    int  write_end      (void) const { return fds[1].d; }
+    int  take_read_end  (void) { return fds[0].take(); }
+    int  take_write_end (void) { return fds[1].take(); }
 };
 
 /** common methods between a Shimmy::Parent and Shimmy::Child */
@@ -82,6 +78,7 @@ class Common {
 protected:
     Common(void);
     ~Common(void);
+    static const char * SHIMMY_FDS_ENV_VAR;
     fd_pair closer_pipe;
     fd_pair child_fds;
     google::protobuf::io::FileInputStream  *pFis; // child_fds[0]
@@ -101,7 +98,7 @@ public:
      * this is useful if you wish to use select(2) and only
      * invoke \ref get_msg when you know there is something to service.
      * \return the file descriptor number. */
-    int  get_read_fd(void) const { return child_fds.fds[0]; }
+    int  get_read_fd(void) const { return child_fds.read_end(); }
     /** read the next message from the read-pipe and return it.
      * if there is no message available, this function blocks until
      * there is one, or until \ref Child::stop is called.
@@ -178,8 +175,6 @@ public:
      *         was not started by a Shimmy::Parent */
     bool init(void);
 };
-
-#define SHIMMY_FDS_ENV_VAR "SHIMMY_FDS"
 
 
 // miscellaneous helpers to wrapper ugly posix boilerplate

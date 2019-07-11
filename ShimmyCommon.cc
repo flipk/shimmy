@@ -3,6 +3,9 @@
 
 namespace Shimmy {
 
+//static
+const char * Common :: SHIMMY_FDS_ENV_VAR = "SHIMMY_FDS";
+
 Common :: Common(void)
 {
     pthread_mutexattr_t  attr;
